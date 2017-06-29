@@ -7,6 +7,7 @@ from tkinter import filedialog
 from urllib import request
 from urllib import error
 import datetime
+import requests
 
 
 # def excel_work(filename):
@@ -17,9 +18,21 @@ import datetime
 #         wb_out += temp
 #     return (x for x in wb_out)
 
+def download_image(link, filename):
+    headers = {'user-agent': 'Mozilla/5.0'}
+    p = requests.get(
+        link,
+        headers=headers, stream=True)
+
+    if p.status_code != 200: raise Exception
+
+    with open('downloads\\'+filename, 'wb') as f:
+        for chunk in p.iter_content(1024):
+            f.write(chunk)
+
 
 def csv_work(filename):
-    f = open(filename, 'r', encoding='utf-8')
+    f = open(filename, 'r', encoding='windows-1252', errors='ignore')
     reader = csv.reader(f)
     return reader
 
@@ -34,13 +47,15 @@ def write_audit(file, row):
 if __name__ == '__main__':
 
     has_headers = True
-    audit_file = 'audit_' + str(datetime.datetime.today()).replace('-', '').replace(':', '').replace('.', '').replace(
-        ' ', '') + '.csv'
 
     # get a file dialogue box
     root = tk.Tk()
     root.withdraw()
     file_path = filedialog.askopenfilename()
+
+    folder = file_path.split('.')[0].split('\\')[-1].split('/')[-1]
+
+    audit_file = 'audit_' + str(datetime.datetime.today()).replace('-', '').replace(':', '').replace('.', '').replace(' ', '') + '.csv'
 
     # quit if you hit cancel
     if file_path == '':
@@ -56,7 +71,8 @@ if __name__ == '__main__':
         # reader = excel_work(file_path)
         pass
 
-    # loop through and download links
+    # loop through and and build dict
+    d = {}
     while True:
         try:
             row = next(reader)
@@ -69,13 +85,22 @@ if __name__ == '__main__':
 
         key = row[0]
         links = row[1:]
+        if key not in d: d[key] = ([],set())
+        for index, full_link in enumerate(links):
+            link = full_link.split("?")[0]
+            link = link.strip()
 
-        for index, link in enumerate(links):
+            if link == '' : continue
+
+            if link not in d[key][1]: d[key][0].append(link)
+
+
+    for key in d:
+        for index, link in enumerate(d[key][0]):
             ext = link.split('.')[-1]
             name = key + '_' + str(index) + '.' + ext
-
             try:
-                request.urlretrieve(link, name)
+                download_image(link, name)
                 audit = ["successfully downloaded", name, link]
             except error.HTTPError:
                 audit = ["error downloading", name, link]
