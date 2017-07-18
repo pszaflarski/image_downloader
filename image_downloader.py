@@ -1,3 +1,4 @@
+import os
 import csv
 import tkinter as tk
 from tkinter import filedialog
@@ -10,25 +11,25 @@ import datetime
 import requests
 
 
-# def excel_work(filename):
-#     wb = openpyxl.load_workbook(filename)
-#     wb_out = []
-#     for sheet in wb:
-#         temp = [[x.value for x in row] for row in sheet.iter_rows()]
-#         wb_out += temp
-#     return (x for x in wb_out)
-
 def download_image(link, filename):
     headers = {'user-agent': 'Mozilla/5.0'}
     p = requests.get(
         link,
         headers=headers, stream=True)
 
-    if p.status_code != 200: raise Exception
+    if p.status_code != 200:
+        return p.status_code
 
-    with open('downloads\\'+filename, 'wb') as f:
-        for chunk in p.iter_content(1024):
-            f.write(chunk)
+    while True:
+        try:
+            with open('./downloads/' + filename, 'wb') as f:
+                for chunk in p.iter_content(1024):
+                    f.write(chunk)
+            break
+        except FileNotFoundError:
+            os.makedirs('./downloads/')
+
+    return p.status_code
 
 
 def csv_work(filename):
@@ -55,7 +56,8 @@ if __name__ == '__main__':
 
     folder = file_path.split('.')[0].split('\\')[-1].split('/')[-1]
 
-    audit_file = 'audit_' + str(datetime.datetime.today()).replace('-', '').replace(':', '').replace('.', '').replace(' ', '') + '.csv'
+    audit_file = 'audit_' + str(datetime.datetime.today()).replace('-', '').replace(':', '').replace('.', '').replace(
+        ' ', '') + '.csv'
 
     # quit if you hit cancel
     if file_path == '':
@@ -65,11 +67,7 @@ if __name__ == '__main__':
         quit()
 
     # convert the file to an iterator
-    if file_path.split('.')[-1] == 'csv':
-        reader = csv_work(file_path)
-    elif file_path.split('.')[-1] == 'xlsx':
-        # reader = excel_work(file_path)
-        pass
+    reader = csv_work(file_path)
 
     # loop through and and build dict
     d = {}
@@ -85,29 +83,30 @@ if __name__ == '__main__':
 
         key = row[0]
         links = row[1:]
-        if key not in d: d[key] = ([],set())
+        if key not in d: d[key] = ([], set())
         for index, full_link in enumerate(links):
             link = full_link.split("?")[0]
             link = link.strip()
 
-            if link == '' : continue
+            if link == '': continue
 
             if link not in d[key][1]: d[key][0].append(link)
-
 
     for key in d:
         for index, link in enumerate(d[key][0]):
             ext = link.split('.')[-1]
             name = key + '_' + str(index) + '.' + ext
+            code = 400 # assume things fail unless they don't
             try:
-                download_image(link, name)
+                code = download_image(link, name)
+                if code != 200: raise Exception
                 audit = ["successfully downloaded", name, link]
             except error.HTTPError:
                 audit = ["error downloading", name, link]
             except (error.URLError, ValueError):
                 audit = ["invalid link", name, link]
             except Exception:
-                audit = ["unknown error", name, link]
+                audit = ["unknown error, code:" + str(code), name, link]
 
             print(audit)
             write_audit(audit_file, audit)
